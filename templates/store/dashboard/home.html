@@ -1,4 +1,132 @@
-{% extends 'store/dashboard/base.html' %}{% block title %}لوحة التحكم | Smart House{% endblock %}{% block heading %}نظرة عامة{% endblock %}
-{% block content %}<section class="stats"><article class="stat-card"><span>إجمالي المنتجات</span><strong>{{ products_count }}</strong><small>كل منتجات المتجر</small></article><article class="stat-card"><span>إجمالي الطلبات</span><strong>{{ orders_count }}</strong><small>كل الطلبات المسجلة</small></article><article class="stat-card accent"><span>طلبات جديدة</span><strong>{{ new_orders_count }}</strong><small>تحتاج إلى متابعة</small></article><article class="stat-card revenue"><span>قيمة الطلبات غير الملغاة</span><strong>{{ completed_revenue|floatformat:2 }}</strong><small>جنيه مصري · ليست تقرير أرباح محاسبي</small></article></section>
-<section class="panel"><div class="panel-head"><div><h2>آخر الطلبات</h2><p>تابع أحدث طلبات العملاء</p></div><a class="btn secondary" href="{% url 'dashboard_orders' %}">كل الطلبات</a></div><div class="table-wrap"><table><thead><tr><th>رقم الطلب</th><th>العميل</th><th>الهاتف</th><th>الإجمالي</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>{% for order in recent_orders %}<tr><td>#{{ order.pk }}</td><td>{{ order.customer_name }}</td><td>{{ order.phone }}</td><td>{{ order.total }} ج.م</td><td><span class="status {{ order.status }}">{{ order.get_status_display }}</span></td><td><a class="edit-link" href="{% url 'dashboard_order_detail' order.pk %}">عرض الطلب</a></td></tr>{% empty %}<tr><td colspan="6" class="empty">لا توجد طلبات حتى الآن.</td></tr>{% endfor %}</tbody></table></div></section>
-<section class="panel"><div class="panel-head"><div><h2>تنبيهات المخزون</h2><p>منتجات مخزونها 5 قطع أو أقل</p></div><a class="btn secondary" href="{% url 'dashboard_products' %}?visibility=low">عرض المنتجات</a></div><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>الكمية المتبقية</th><th>الإجراء</th></tr></thead><tbody>{% for product in low_stock_products %}<tr><td>{{ product.name }}</td><td><span class="status {% if product.stock == 0 %}cancelled{% else %}new{% endif %}">{{ product.stock }}</span></td><td><a class="edit-link" href="{% url 'dashboard_product_edit' product.pk %}">تحديث المخزون</a></td></tr>{% empty %}<tr><td colspan="3" class="empty">لا توجد تنبيهات مخزون حالياً.</td></tr>{% endfor %}</tbody></table></div></section><div class="quick-actions"><a class="btn" href="{% url 'dashboard_product_add' %}">＋ إضافة منتج جديد</a><a class="btn secondary" href="{% url 'dashboard_orders' %}">▣ متابعة الطلبات</a></div>{% endblock %}
+{% extends 'store/dashboard/base.html' %}
+{% block title %}نظرة عامة | Smart House{% endblock %}
+{% block heading %}نظرة عامة{% endblock %}
+{% block content %}
+<section class="welcome-banner">
+  <div>
+    <span class="welcome-kicker">مساء الخير، {{ request.user.get_short_name|default:request.user.username }}</span>
+    <h2>كل تفاصيل متجرك في مكان واحد</h2>
+    <p>تابع الطلبات والمبيعات والمخزون، وحدّث متجرك بخطوات سريعة.</p>
+  </div>
+  <a class="btn btn-light" href="{% url 'dashboard_product_add' %}"><span aria-hidden="true">＋</span> إضافة منتج جديد</a>
+</section>
+
+<section class="stats-grid" aria-label="ملخص المتجر">
+  <article class="stat-card stat-orders">
+    <div class="stat-top"><span class="stat-icon">▤</span><span class="stat-label">طلبات اليوم</span></div>
+    <strong>{{ orders_today_count }}</strong>
+    <small>من إجمالي {{ orders_count }} طلب</small>
+  </article>
+  <article class="stat-card stat-new-orders">
+    <div class="stat-top"><span class="stat-icon">◷</span><span class="stat-label">بانتظار المتابعة</span></div>
+    <strong>{{ new_orders_count }}</strong>
+    <small><a href="{% url 'dashboard_orders' %}?status=new">افتح الطلبات الجديدة ←</a></small>
+  </article>
+  <article class="stat-card stat-value">
+    <div class="stat-top"><span class="stat-icon">ج.م</span><span class="stat-label">قيمة الطلبات هذا الشهر</span></div>
+    <strong>{{ month_value|floatformat:2 }}</strong>
+    <small>{{ month_orders_count }} طلب غير ملغي · ليست صافي أرباح</small>
+  </article>
+  <article class="stat-card stat-products">
+    <div class="stat-top"><span class="stat-icon">▦</span><span class="stat-label">منتجات ظاهرة</span></div>
+    <strong>{{ active_products_count }}</strong>
+    <small>{{ low_stock_count }} منتجات تحتاج إعادة تزويد</small>
+  </article>
+</section>
+
+<section class="dashboard-grid dashboard-grid-main">
+  <article class="panel chart-panel">
+    <div class="panel-head">
+      <div><span class="section-kicker">الأداء</span><h2>قيمة الطلبات خلال 7 أيام</h2><p>الطلبات غير الملغاة · بالجنيه المصري</p></div>
+      <span class="period-pill">آخر 7 أيام</span>
+    </div>
+    <div class="sales-chart" role="img" aria-label="رسم لقيمة الطلبات اليومية في آخر سبعة أيام">
+      {% for day in sales_chart %}
+        <div class="chart-column {% if day.is_today %}today{% endif %}">
+          <span class="chart-value">{{ day.value|floatformat:0 }}</span>
+          <div class="chart-track"><span class="chart-bar" style="height:{{ day.height }}%"></span></div>
+          <span class="chart-label">{{ day.label }}</span>
+        </div>
+      {% endfor %}
+    </div>
+    <p class="chart-note">القيم تمثل إجمالي الطلبات المسجلة وليست أرباحًا أو مدفوعات مؤكدة.</p>
+  </article>
+
+  <article class="panel status-panel">
+    <div class="panel-head"><div><span class="section-kicker">سير العمل</span><h2>حالة الطلبات</h2><p>متابعة سريعة لكل مرحلة</p></div></div>
+    <div class="status-summary">
+      <a href="{% url 'dashboard_orders' %}?status=new" class="status-row"><span><i class="status-dot dot-new"></i>جديد</span><strong>{{ new_orders_count }}</strong></a>
+      <a href="{% url 'dashboard_orders' %}?status=confirmed" class="status-row"><span><i class="status-dot dot-confirmed"></i>تم التأكيد</span><strong>{{ confirmed_orders_count }}</strong></a>
+      <a href="{% url 'dashboard_orders' %}?status=shipped" class="status-row"><span><i class="status-dot dot-shipped"></i>تم الشحن</span><strong>{{ shipped_orders_count }}</strong></a>
+    </div>
+    <a class="panel-footer-link" href="{% url 'dashboard_orders' %}">إدارة كل الطلبات <span>←</span></a>
+  </article>
+</section>
+
+<section class="dashboard-grid dashboard-grid-secondary">
+  <article class="panel table-panel">
+    <div class="panel-head">
+      <div><span class="section-kicker">آخر النشاط</span><h2>أحدث الطلبات</h2><p>راجع الطلبات واتخذ إجراءً سريعًا</p></div>
+      <a class="btn btn-subtle" href="{% url 'dashboard_orders' %}">كل الطلبات</a>
+    </div>
+    <div class="table-wrap">
+      <table class="admin-table">
+        <thead><tr><th>الطلب</th><th>العميل</th><th>التاريخ</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead>
+        <tbody>
+          {% for order in recent_orders %}
+            <tr>
+              <td><a class="order-id" href="{% url 'dashboard_order_detail' order.pk %}">#{{ order.pk }}</a></td>
+              <td><strong>{{ order.customer_name }}</strong><small class="table-subtext">{{ order.phone }}</small></td>
+              <td>{{ order.created_at|date:'d/m/Y' }}<small class="table-subtext">{{ order.created_at|date:'H:i' }}</small></td>
+              <td class="amount-cell">{{ order.total|floatformat:2 }} <small>ج.م</small></td>
+              <td><span class="status-badge status-{{ order.status }}">{{ order.get_status_display }}</span></td>
+              <td><a class="icon-link" aria-label="تفاصيل الطلب {{ order.pk }}" href="{% url 'dashboard_order_detail' order.pk %}">←</a></td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6"><div class="empty-state"><span class="empty-icon">▤</span><strong>لسه مفيش طلبات</strong><small>هتظهر طلبات العملاء هنا أول ما يطلبوا من المتجر.</small></div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </article>
+
+  <div class="side-panels">
+    <article class="panel stock-panel">
+      <div class="panel-head">
+        <div><span class="section-kicker">المخزون</span><h2>تنبيهات المخزون</h2><p>5 قطع أو أقل</p></div>
+        <span class="count-bubble {% if low_stock_count %}count-warning{% endif %}">{{ low_stock_count }}</span>
+      </div>
+      <div class="stock-list">
+        {% for product in low_stock_products %}
+          <div class="stock-item">
+            <div class="stock-product"><span class="stock-thumb">{% if product.image %}<img src="{{ product.image.url }}" alt="">{% else %}SH{% endif %}</span><span><strong>{{ product.name }}</strong><small>{% if product.stock == 0 %}نفد المخزون{% else %}متبقي {{ product.stock }}{% endif %}</small></span></div>
+            <a class="edit-link" href="{% url 'dashboard_product_edit' product.pk %}">تحديث</a>
+          </div>
+        {% empty %}
+          <div class="compact-empty"><span>✓</span><strong>المخزون جيد</strong><small>لا توجد منتجات قريبة من النفاد.</small></div>
+        {% endfor %}
+      </div>
+      <a class="panel-footer-link" href="{% url 'dashboard_products' %}?visibility=low">عرض المنتجات منخفضة المخزون <span>←</span></a>
+    </article>
+
+    <article class="panel best-panel">
+      <div class="panel-head"><div><span class="section-kicker">الأكثر طلبًا</span><h2>أفضل المنتجات هذا الشهر</h2></div></div>
+      <div class="best-list">
+        {% for item in best_sellers %}
+          <div class="best-item"><span class="rank">{{ forloop.counter|stringformat:"02d" }}</span><strong>{{ item.product__name }}</strong><span class="units-pill">{{ item.units }} قطعة</span></div>
+        {% empty %}
+          <div class="compact-empty"><span>◦</span><strong>لا توجد بيانات كافية بعد</strong><small>سيظهر الترتيب بعد تسجيل طلبات.</small></div>
+        {% endfor %}
+      </div>
+    </article>
+  </div>
+</section>
+
+<section class="quick-action-row">
+  <div><span class="section-kicker">اختصارات</span><strong>إيه اللي محتاج تعمله؟</strong></div>
+  <a class="quick-action" href="{% url 'dashboard_product_add' %}"><span>＋</span><span><strong>إضافة منتج</strong><small>انشر منتجًا جديدًا في المتجر</small></span><b>←</b></a>
+  <a class="quick-action" href="{% url 'dashboard_orders' %}?status=new"><span>▤</span><span><strong>مراجعة الطلبات الجديدة</strong><small>{{ new_orders_count }} طلب في انتظارك</small></span><b>←</b></a>
+  <a class="quick-action" href="{% url 'dashboard_products' %}?visibility=low"><span>▦</span><span><strong>تحديث المخزون</strong><small>{{ low_stock_count }} منتجات منخفضة المخزون</small></span><b>←</b></a>
+</section>
+{% endblock %}
+

@@ -1,8 +1,16 @@
+import csv
+from datetime import timedelta
 from decimal import Decimal
 from django.contrib import messages
+from django.core.paginator import Paginator
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDate
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .models import Product, Order, OrderItem
+
 
 def home(request):
     products = Product.objects.filter(is_active=True)
@@ -75,12 +83,9 @@ def contact(request):
 
 
 # ---------------- Custom Smart House dashboard ----------------
-from functools import wraps
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import user_passes_test
 from django.forms import ModelForm
 from django.utils.text import slugify
-from django.db.models import Sum, Count, Q
-from .models import Product, Order
 
 class ProductForm(ModelForm):
     class Meta:
@@ -94,14 +99,59 @@ def staff_required(view_func):
 
 @staff_required
 def dashboard(request):
-    completed_revenue = Order.objects.exclude(status="cancelled").aggregate(total=Sum("total"))["total"] or Decimal("0.00")
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
+    week_start = today - timedelta(days=6)
+
+    valid_orders = Order.objects.exclude(status="cancelled")
+    weekly_values = (
+        valid_orders.filter(created_at__date__gte=week_start, created_at__date__lte=today)
+        .annotate(day=TruncDate("created_at"))
+        .values("day")
+        .annotate(value=Sum("total"))
+        .order_by("day")
+    )
+    sales_by_day = {row["day"]: row["value"] for row in weekly_values}
+    max_daily_value = max(sales_by_day.values(), default=Decimal("0.00"))
+    sales_chart = []
+    for offset in range(6, -1, -1):
+        day = today - timedelta(days=offset)
+        value = sales_by_day.get(day, Decimal("0.00"))
+        height = round(float(value / max_daily_value) * 100) if max_daily_value else 0
+        sales_chart.append({
+            "label": day.strftime("%d/%m"),
+            "value": value,
+            "height": max(height, 3) if value else 0,
+            "is_today": day == today,
+        })
+
+    month_orders = valid_orders.filter(created_at__date__gte=month_start, created_at__date__lte=today)
+    month_value = month_orders.aggregate(total=Sum("total"))["total"] or Decimal("0.00")
+    status_counts = dict(Order.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
+    low_stock = Product.objects.filter(is_active=True, stock__lte=5)
+    best_sellers = (
+        OrderItem.objects.filter(order__created_at__date__gte=month_start, order__created_at__date__lte=today)
+        .exclude(order__status="cancelled")
+        .values("product__id", "product__name")
+        .annotate(units=Sum("quantity"))
+        .order_by("-units")[:5]
+    )
     context = {
         "products_count": Product.objects.count(),
         "orders_count": Order.objects.count(),
-        "new_orders_count": Order.objects.filter(status="new").count(),
-        "completed_revenue": completed_revenue,
-        "low_stock_products": Product.objects.filter(is_active=True, stock__lte=5).order_by("stock")[:8],
+        "active_products_count": Product.objects.filter(is_active=True).count(),
+        "orders_today_count": Order.objects.filter(created_at__date=today).count(),
+        "new_orders_count": status_counts.get("new", 0),
+        "confirmed_orders_count": status_counts.get("confirmed", 0),
+        "shipped_orders_count": status_counts.get("shipped", 0),
+        "month_orders_count": month_orders.count(),
+        "month_value": month_value,
+        "low_stock_count": low_stock.count(),
+        "low_stock_products": low_stock.order_by("stock", "name")[:6],
         "recent_orders": Order.objects.all()[:8],
+        "sales_chart": sales_chart,
+        "best_sellers": best_sellers,
+        "active": "home",
     }
     return render(request, "store/dashboard/home.html", context)
 
@@ -117,8 +167,28 @@ def dashboard_products(request):
     elif visibility == "hidden":
         products = products.filter(is_active=False)
     elif visibility == "low":
-        products = products.filter(stock__lte=5)
-    return render(request, "store/dashboard/products.html", {"products": products, "query": query, "visibility": visibility})
+        products = products.filter(is_active=True, stock__lte=5)
+
+    sort = request.GET.get("sort", "newest")
+    ordering = {
+        "newest": "-created_at",
+        "name": "name",
+        "price_low": "price",
+        "stock_low": "stock",
+    }.get(sort, "-created_at")
+    page_obj = Paginator(products.order_by(ordering, "pk"), 20).get_page(request.GET.get("page"))
+    return render(request, "store/dashboard/products.html", {
+        "products": page_obj.object_list,
+        "page_obj": page_obj,
+        "query": query,
+        "visibility": visibility,
+        "sort": sort,
+        "products_count": Product.objects.count(),
+        "active_products_count": Product.objects.filter(is_active=True).count(),
+        "hidden_products_count": Product.objects.filter(is_active=False).count(),
+        "low_stock_count": Product.objects.filter(is_active=True, stock__lte=5).count(),
+        "active": "products",
+    })
 
 @staff_required
 def dashboard_product_add(request):
@@ -133,7 +203,7 @@ def dashboard_product_add(request):
             return redirect("dashboard_products")
     else:
         form = ProductForm()
-    return render(request, "store/dashboard/product_form.html", {"form": form, "page_title": "إضافة منتج جديد"})
+    return render(request, "store/dashboard/product_form.html", {"form": form, "page_title": "إضافة منتج جديد", "active": "products"})
 
 @staff_required
 def dashboard_product_edit(request, pk):
@@ -146,7 +216,17 @@ def dashboard_product_edit(request, pk):
             return redirect("dashboard_products")
     else:
         form = ProductForm(instance=product)
-    return render(request, "store/dashboard/product_form.html", {"form": form, "page_title": "تعديل المنتج"})
+    return render(request, "store/dashboard/product_form.html", {"form": form, "page_title": "تعديل المنتج", "active": "products"})
+
+@staff_required
+@require_POST
+def dashboard_product_toggle(request, pk):
+    product = get_object_or_404(Product, pk=pk)
+    product.is_active = not product.is_active
+    product.save(update_fields=["is_active"])
+    state = "ظهر في المتجر" if product.is_active else "أُخفي من المتجر"
+    messages.success(request, f"تم تحديث ظهور المنتج: {state}.")
+    return redirect("dashboard_products")
 
 @staff_required
 @require_POST
@@ -168,12 +248,64 @@ def dashboard_orders(request):
             orders = orders.filter(Q(customer_name__icontains=query) | Q(phone__icontains=query))
     if status in dict(Order.STATUS_CHOICES):
         orders = orders.filter(status=status)
-    return render(request, "store/dashboard/orders.html", {"orders": orders, "query": query, "selected_status": status})
+
+    if request.GET.get("download") == "csv":
+        return _orders_csv(orders)
+
+    page_obj = Paginator(orders, 20).get_page(request.GET.get("page"))
+    status_counts = dict(Order.objects.values("status").annotate(count=Count("id")).values_list("status", "count"))
+    return render(request, "store/dashboard/orders.html", {
+        "orders": page_obj.object_list,
+        "page_obj": page_obj,
+        "query": query,
+        "selected_status": status,
+        "status_choices": Order.STATUS_CHOICES,
+        "status_counts": status_counts,
+        "orders_count": Order.objects.count(),
+        "active": "orders",
+    })
+
+
+def _csv_cell(value):
+    text = str(value or "")
+    if text.lstrip(" \t\r\n")[:1] in {"=", "+", "-", "@"}:
+        return "'" + text
+    return text
+
+
+def _orders_csv(orders):
+    response = HttpResponse(content_type="text/csv; charset=utf-8")
+    response.write("\ufeff")
+    response["Content-Disposition"] = f'attachment; filename="smart-house-orders-{timezone.localdate():%Y%m%d}.csv"'
+    writer = csv.writer(response)
+    writer.writerow(["رقم الطلب", "التاريخ", "اسم العميل", "الهاتف", "العنوان", "المنتجات", "الإجمالي", "الحالة"])
+    for order in orders.iterator(chunk_size=200):
+        items = ", ".join(
+            f"{item.product.name} × {item.quantity}"
+            for item in order.items.all()
+        )
+        writer.writerow([
+            order.pk,
+            timezone.localtime(order.created_at).strftime("%Y-%m-%d %H:%M"),
+            _csv_cell(order.customer_name),
+            _csv_cell(order.phone),
+            _csv_cell(order.address),
+            _csv_cell(items),
+            order.total,
+            order.get_status_display(),
+        ])
+    return response
 
 @staff_required
 def dashboard_order_detail(request, pk):
     order = get_object_or_404(Order.objects.prefetch_related("items__product"), pk=pk)
-    return render(request, "store/dashboard/order_detail.html", {"order": order})
+    item_rows = [{"item": item, "subtotal": item.unit_price * item.quantity} for item in order.items.all()]
+    return render(request, "store/dashboard/order_detail.html", {
+        "order": order,
+        "item_rows": item_rows,
+        "status_choices": Order.STATUS_CHOICES,
+        "active": "orders",
+    })
 
 @staff_required
 def dashboard_customers(request):
@@ -183,7 +315,13 @@ def dashboard_customers(request):
     query = request.GET.get("q", "").strip()
     if query:
         customers = customers.filter(Q(customer_name__icontains=query) | Q(phone__icontains=query))
-    return render(request, "store/dashboard/customers.html", {"customers": customers, "query": query})
+    page_obj = Paginator(customers, 25).get_page(request.GET.get("page"))
+    return render(request, "store/dashboard/customers.html", {
+        "customers": page_obj.object_list,
+        "page_obj": page_obj,
+        "query": query,
+        "active": "customers",
+    })
 
 @staff_required
 @require_POST
@@ -197,4 +335,7 @@ def dashboard_order_status(request, pk):
         messages.success(request, f"تم تحديث حالة الطلب #{order.pk}.")
     else:
         messages.error(request, "حالة الطلب غير صحيحة.")
+    if request.POST.get("return_to") == "detail":
+        return redirect("dashboard_order_detail", pk=pk)
     return redirect("dashboard_orders")
+

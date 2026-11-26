@@ -1,1 +1,43 @@
-{% extends 'store/dashboard/base.html' %}{% block title %}العملاء | Smart House{% endblock %}{% block heading %}إدارة العملاء{% endblock %}{% block content %}<section class="panel"><div class="panel-head"><div><h2>عملاء المتجر</h2><p>قائمة مجمعة من بيانات الطلبات المسجلة</p></div></div><form class="filter-bar" method="get"><input name="q" value="{{ query }}" placeholder="ابحث باسم العميل أو رقم الهاتف"><button class="btn secondary">بحث</button></form><div class="table-wrap"><table><thead><tr><th>اسم العميل</th><th>الهاتف</th><th>العنوان المسجل</th><th>عدد الطلبات</th><th>إجمالي الطلبات</th></tr></thead><tbody>{% for customer in customers %}<tr><td><strong>{{ customer.customer_name }}</strong></td><td><a href="tel:{{ customer.phone }}">{{ customer.phone }}</a></td><td>{{ customer.address }}</td><td>{{ customer.orders_count }}</td><td>{{ customer.total_spent|default:0 }} ج.م</td></tr>{% empty %}<tr><td colspan="5" class="empty">لا توجد بيانات عملاء بعد.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends 'store/dashboard/base.html' %}
+{% block title %}العملاء | Smart House{% endblock %}
+{% block heading %}العملاء{% endblock %}
+{% block content %}
+<section class="page-intro-row">
+  <div><span class="section-kicker">العلاقات</span><h2>عملاء المتجر</h2><p>بيانات مجمعة من الطلبات المسجلة لمساعدتك في متابعة العملاء.</p></div>
+</section>
+
+<section class="panel list-panel">
+  <div class="panel-head"><div><h2>سجل العملاء</h2><p>{{ page_obj.paginator.count }} عميل</p></div></div>
+  <form class="filter-bar filter-bar-modern" method="get">
+    <label class="search-field"><span aria-hidden="true">⌕</span><input name="q" value="{{ query }}" placeholder="ابحث باسم العميل أو رقم الهاتف"></label>
+    <button class="btn btn-subtle" type="submit">بحث</button>
+    {% if query %}<a class="clear-filters" href="{% url 'dashboard_customers' %}">مسح البحث</a>{% endif %}
+  </form>
+  <div class="table-wrap">
+    <table class="admin-table customer-table">
+      <thead><tr><th>العميل</th><th>الهاتف</th><th>العنوان المسجل</th><th>الطلبات</th><th>قيمة الطلبات</th><th></th></tr></thead>
+      <tbody>
+        {% for customer in customers %}
+          <tr>
+            <td><div class="customer-cell"><span class="customer-avatar">{{ customer.customer_name|slice:":1" }}</span><strong>{{ customer.customer_name }}</strong></div></td>
+            <td><a class="phone-link" href="tel:{{ customer.phone }}">{{ customer.phone }}</a></td>
+            <td class="customer-address">{{ customer.address|truncatechars:64 }}</td>
+            <td><span class="units-pill">{{ customer.orders_count }} طلب</span></td>
+            <td class="amount-cell">{{ customer.total_spent|default:0|floatformat:2 }} <small>ج.م</small></td>
+            <td><a class="icon-link" aria-label="اتصال بالعميل {{ customer.customer_name }}" href="tel:{{ customer.phone }}">☎</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6"><div class="empty-state"><span class="empty-icon">♙</span><strong>{% if query %}لم نعثر على عميل بهذا البحث{% else %}لا توجد بيانات عملاء بعد{% endif %}</strong><small>{% if query %}جرّب اسمًا أو رقم هاتف مختلفًا.{% else %}بيانات العملاء تُجمع تلقائيًا من طلبات المتجر.{% endif %}</small></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="صفحات العملاء">
+      <span>صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span>
+      <div>{% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&page={{ page_obj.previous_page_number }}">السابق</a>{% endif %}{% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&page={{ page_obj.next_page_number }}">التالي</a>{% endif %}</div>
+    </nav>
+  {% endif %}
+</section>
+{% endblock %}
+

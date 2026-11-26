@@ -1,1 +1,50 @@
-{% extends 'store/dashboard/base.html' %}{% block title %}تفاصيل الطلب #{{ order.pk }}{% endblock %}{% block heading %}تفاصيل الطلب #{{ order.pk }}{% endblock %}{% block content %}<section class="panel"><div class="panel-head"><div><h2>بيانات العميل</h2><p>{{ order.created_at|date:'Y-m-d H:i' }}</p></div><span class="status {{ order.status }}">{{ order.get_status_display }}</span></div><div class="detail-grid"><div><small>اسم العميل</small><strong>{{ order.customer_name }}</strong></div><div><small>رقم الهاتف</small><strong><a href="tel:{{ order.phone }}">{{ order.phone }}</a></strong></div><div class="wide"><small>العنوان</small><strong>{{ order.address }}</strong></div><div class="wide"><small>ملاحظات العميل</small><strong>{{ order.notes|default:'لا توجد ملاحظات' }}</strong></div></div></section><section class="panel"><h2>المنتجات المطلوبة</h2><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>الكمية</th><th>سعر الوحدة</th><th>الإجمالي</th></tr></thead><tbody>{% for item in order.items.all %}<tr><td>{{ item.product.name }}</td><td>{{ item.quantity }}</td><td>{{ item.unit_price }} ج.م</td><td>{{ item.unit_price|floatformat:2 }} × {{ item.quantity }}</td></tr>{% endfor %}</tbody></table></div><h2 class="order-total">إجمالي الطلب: {{ order.total }} جنيه</h2><form class="status-form" method="post" action="{% url 'dashboard_order_status' order.pk %}">{% csrf_token %}<select name="status">{% for value,label in order.STATUS_CHOICES %}<option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn">تحديث الحالة</button><a class="btn secondary" href="{% url 'dashboard_orders' %}">رجوع للطلبات</a></form></section>{% endblock %}
+{% extends 'store/dashboard/base.html' %}
+{% block title %}الطلب #{{ order.pk }} | Smart House{% endblock %}
+{% block heading %}تفاصيل الطلب{% endblock %}
+{% block content %}
+<section class="order-detail-heading">
+  <div><a class="back-link" href="{% url 'dashboard_orders' %}">← الرجوع للطلبات</a><div class="order-title-row"><h2>طلب #{{ order.pk }}</h2><span class="status-badge status-{{ order.status }}">{{ order.get_status_display }}</span></div><p>تم استلام الطلب في {{ order.created_at|date:'d F Y · H:i' }}</p></div>
+  <a class="btn btn-subtle" href="{% url 'dashboard_orders' %}?download=csv">⇩ تصدير الطلبات</a>
+</section>
+
+<section class="order-detail-grid">
+  <div class="order-detail-main">
+    <article class="panel">
+      <div class="panel-head"><div><span class="section-kicker">محتويات الطلب</span><h2>المنتجات المطلوبة</h2></div><span class="units-pill">{{ item_rows|length }} عناصر</span></div>
+      <div class="table-wrap">
+        <table class="admin-table detail-items-table">
+          <thead><tr><th>المنتج</th><th>سعر الوحدة</th><th>الكمية</th><th>الإجمالي</th></tr></thead>
+          <tbody>
+            {% for row in item_rows %}
+              <tr><td><strong>{{ row.item.product.name }}</strong></td><td>{{ row.item.unit_price|floatformat:2 }} ج.م</td><td>{{ row.item.quantity }}</td><td class="amount-cell">{{ row.subtotal|floatformat:2 }} ج.م</td></tr>
+            {% empty %}<tr><td colspan="4" class="empty-cell">لا توجد منتجات مرتبطة بهذا الطلب.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </div>
+      <div class="order-total-row"><span>إجمالي الطلب</span><strong>{{ order.total|floatformat:2 }} <small>جنيه مصري</small></strong></div>
+    </article>
+
+    <article class="panel customer-note-panel">
+      <div class="panel-head"><div><span class="section-kicker">ملاحظات</span><h2>رسالة العميل</h2></div></div>
+      <p>{{ order.notes|default:'لم يضف العميل ملاحظات.'|linebreaksbr }}</p>
+    </article>
+  </div>
+
+  <aside class="order-detail-side">
+    <article class="panel customer-info-panel">
+      <div class="panel-head"><div><span class="section-kicker">التوصيل</span><h2>بيانات العميل</h2></div></div>
+      <div class="customer-info-row"><span class="customer-avatar">{{ order.customer_name|slice:":1" }}</span><div><strong>{{ order.customer_name }}</strong><small>عميل المتجر</small></div></div>
+      <div class="info-block"><small>رقم الهاتف</small><a class="phone-link" href="tel:{{ order.phone }}">{{ order.phone }}</a></div>
+      <div class="info-block"><small>عنوان التوصيل</small><strong>{{ order.address }}</strong></div>
+    </article>
+
+    <article class="panel update-order-panel">
+      <div class="panel-head"><div><span class="section-kicker">إجراء</span><h2>تحديث حالة الطلب</h2></div></div>
+      <form class="status-update-form" method="post" action="{% url 'dashboard_order_status' order.pk %}">
+        {% csrf_token %}<input type="hidden" name="return_to" value="detail"><label for="order-status">الحالة الحالية</label><select id="order-status" name="status">{% for value,label in status_choices %}<option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn" type="submit">حفظ التحديث</button>
+      </form>
+    </article>
+  </aside>
+</section>
+{% endblock %}
+

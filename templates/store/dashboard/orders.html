@@ -1,1 +1,54 @@
-{% extends 'store/dashboard/base.html' %}{% block title %}الطلبات | Smart House{% endblock %}{% block heading %}إدارة الطلبات{% endblock %}{% block content %}<section class="panel"><div class="panel-head"><div><h2>طلبات العملاء</h2><p>ابحث برقم الطلب أو اسم العميل أو الهاتف، وغيّر الحالة</p></div></div><form class="filter-bar" method="get"><input name="q" value="{{ query }}" placeholder="رقم الطلب / اسم العميل / الهاتف"><select name="status"><option value="">كل الحالات</option>{% for value,label in orders.model.STATUS_CHOICES %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn secondary">تطبيق</button></form><div class="table-wrap"><table><thead><tr><th>رقم</th><th>العميل</th><th>التواصل والعنوان</th><th>المنتجات</th><th>الإجمالي</th><th>الحالة</th><th>التفاصيل</th></tr></thead><tbody>{% for order in orders %}<tr><td>#{{ order.pk }}<small class="date">{{ order.created_at|date:'Y-m-d H:i' }}</small></td><td><strong>{{ order.customer_name }}</strong></td><td><a href="tel:{{ order.phone }}">{{ order.phone }}</a><small class="date">{{ order.address }}</small></td><td>{% for item in order.items.all %}<small>{{ item.product.name }} × {{ item.quantity }}</small>{% empty %}—{% endfor %}</td><td>{{ order.total }} ج.م</td><td><form class="status-form" method="post" action="{% url 'dashboard_order_status' order.pk %}">{% csrf_token %}<select name="status">{% for value,label in order.STATUS_CHOICES %}<option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="save-status">حفظ</button></form></td><td><a class="edit-link" href="{% url 'dashboard_order_detail' order.pk %}">تفاصيل</a></td></tr>{% empty %}<tr><td colspan="7" class="empty">لا توجد طلبات مطابقة.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends 'store/dashboard/base.html' %}
+{% block title %}الطلبات | Smart House{% endblock %}
+{% block heading %}إدارة الطلبات{% endblock %}
+{% block content %}
+<section class="page-intro-row">
+  <div><span class="section-kicker">المبيعات</span><h2>طلبات العملاء</h2><p>تابع حالة الطلب، راجع بيانات التوصيل، وسجّل خطوات التنفيذ.</p></div>
+  <a class="btn btn-subtle" href="?q={{ query|urlencode }}&status={{ selected_status }}&download=csv"><span aria-hidden="true">⇩</span> تصدير النتائج CSV</a>
+</section>
+
+<section class="order-summary-grid">
+  <a class="order-summary-card" href="{% url 'dashboard_orders' %}"><span>كل الطلبات</span><strong>{{ orders_count }}</strong></a>
+  <a class="order-summary-card summary-new" href="?status=new"><span>جديد</span><strong>{{ status_counts.new|default:0 }}</strong></a>
+  <a class="order-summary-card summary-confirmed" href="?status=confirmed"><span>تم التأكيد</span><strong>{{ status_counts.confirmed|default:0 }}</strong></a>
+  <a class="order-summary-card summary-shipped" href="?status=shipped"><span>تم الشحن</span><strong>{{ status_counts.shipped|default:0 }}</strong></a>
+  <a class="order-summary-card summary-completed" href="?status=completed"><span>مكتمل</span><strong>{{ status_counts.completed|default:0 }}</strong></a>
+</section>
+
+<section class="panel list-panel">
+  <div class="panel-head"><div><h2>سجل الطلبات</h2><p>{{ page_obj.paginator.count }} نتيجة{% if selected_status %} · {{ selected_status }}{% endif %}</p></div></div>
+  <form class="filter-bar filter-bar-modern" method="get">
+    <label class="search-field"><span aria-hidden="true">⌕</span><input name="q" value="{{ query }}" placeholder="رقم الطلب، اسم العميل، أو رقم الهاتف"></label>
+    <select name="status" aria-label="تصفية حسب حالة الطلب"><option value="">كل الحالات</option>{% for value,label in status_choices %}<option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    <button class="btn btn-subtle" type="submit">بحث وتصفية</button>
+    {% if query or selected_status %}<a class="clear-filters" href="{% url 'dashboard_orders' %}">مسح التصفية</a>{% endif %}
+  </form>
+  <div class="table-wrap">
+    <table class="admin-table order-table">
+      <thead><tr><th>رقم الطلب</th><th>العميل</th><th>بيانات التواصل</th><th>المنتجات</th><th>الإجمالي</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        {% for order in orders %}
+          <tr>
+            <td><a class="order-id" href="{% url 'dashboard_order_detail' order.pk %}">#{{ order.pk }}</a><small class="table-subtext">{{ order.created_at|date:'d/m/Y · H:i' }}</small></td>
+            <td><strong>{{ order.customer_name }}</strong><small class="table-subtext">{{ order.items.count }} منتجات</small></td>
+            <td><a class="phone-link" href="tel:{{ order.phone }}">{{ order.phone }}</a><small class="table-subtext address-preview">{{ order.address|truncatechars:38 }}</small></td>
+            <td><div class="order-items-preview">{% for item in order.items.all|slice:":2" %}<small>{{ item.product.name }} × {{ item.quantity }}</small>{% endfor %}{% if order.items.count > 2 %}<small class="more-items">+ {{ order.items.count|add:"-2" }} منتجات أخرى</small>{% endif %}</div></td>
+            <td class="amount-cell">{{ order.total|floatformat:2 }} <small>ج.م</small></td>
+            <td><form class="inline-status-form" method="post" action="{% url 'dashboard_order_status' order.pk %}">{% csrf_token %}<select name="status" aria-label="حالة الطلب {{ order.pk }}">{% for value,label in status_choices %}<option value="{{ value }}" {% if order.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="status-save" type="submit">حفظ</button></form></td>
+            <td><a class="icon-link" aria-label="عرض الطلب {{ order.pk }}" href="{% url 'dashboard_order_detail' order.pk %}">←</a></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="7"><div class="empty-state"><span class="empty-icon">▤</span><strong>{% if query or selected_status %}لا توجد طلبات مطابقة{% else %}لا توجد طلبات حتى الآن{% endif %}</strong><small>{% if query or selected_status %}غيّر البحث أو التصفية لعرض نتائج أخرى.{% else %}طلبات العملاء الجديدة ستظهر هنا تلقائيًا.{% endif %}</small></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="صفحات الطلبات">
+      <span>صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span>
+      <div>{% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&status={{ selected_status }}&page={{ page_obj.previous_page_number }}">السابق</a>{% endif %}{% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&status={{ selected_status }}&page={{ page_obj.next_page_number }}">التالي</a>{% endif %}</div>
+    </nav>
+  {% endif %}
+</section>
+{% endblock %}
+

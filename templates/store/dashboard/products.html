@@ -1,1 +1,64 @@
-{% extends 'store/dashboard/base.html' %}{% block title %}المنتجات | Smart House{% endblock %}{% block heading %}إدارة المنتجات{% endblock %}{% block content %}<section class="panel"><div class="panel-head"><div><h2>كل المنتجات</h2><p>أضف المنتجات أو عدّل بياناتها أو احذفها</p></div><a class="btn" href="{% url 'dashboard_product_add' %}">＋ إضافة منتج</a></div><form class="filter-bar" method="get"><input name="q" value="{{ query }}" placeholder="ابحث باسم المنتج أو الوصف"><select name="visibility"><option value="">كل المنتجات</option><option value="active" {% if visibility == 'active' %}selected{% endif %}>المنتجات الظاهرة</option><option value="hidden" {% if visibility == 'hidden' %}selected{% endif %}>المنتجات المخفية</option><option value="low" {% if visibility == 'low' %}selected{% endif %}>مخزون منخفض</option></select><button class="btn secondary">بحث / تصفية</button></form><div class="table-wrap"><table><thead><tr><th>المنتج</th><th>السعر</th><th>المخزون</th><th>الظهور</th><th>إجراءات</th></tr></thead><tbody>{% for product in products %}<tr><td><div class="product-cell">{% if product.image %}<img src="{{ product.image.url }}" alt="">{% else %}<span class="thumb-empty">SH</span>{% endif %}<strong>{{ product.name }}</strong></div></td><td>{{ product.current_price }} ج.م</td><td>{{ product.stock }}</td><td>{% if product.is_active %}<span class="status completed">ظاهر</span>{% else %}<span class="status cancelled">مخفي</span>{% endif %}</td><td class="actions"><a class="edit-link" href="{% url 'dashboard_product_edit' product.pk %}">تعديل</a><form method="post" action="{% url 'dashboard_product_delete' product.pk %}" onsubmit="return confirm('هل تريد حذف المنتج؟')">{% csrf_token %}<button class="delete-link">حذف</button></form></td></tr>{% empty %}<tr><td colspan="5" class="empty">لا توجد منتجات مطابقة.</td></tr>{% endfor %}</tbody></table></div></section>{% endblock %}
+{% extends 'store/dashboard/base.html' %}
+{% block title %}المنتجات والمخزون | Smart House{% endblock %}
+{% block heading %}المنتجات والمخزون{% endblock %}
+{% block content %}
+<section class="page-intro-row">
+  <div><span class="section-kicker">كتالوج المتجر</span><h2>إدارة المنتجات</h2><p>حدّث الأسعار والصور والمخزون أو تحكم في ظهور المنتجات للزوار.</p></div>
+  <a class="btn" href="{% url 'dashboard_product_add' %}"><span aria-hidden="true">＋</span> منتج جديد</a>
+</section>
+
+<section class="mini-stats-grid">
+  <div class="mini-stat"><span class="mini-stat-icon">▦</span><span><small>كل المنتجات</small><strong>{{ products_count }}</strong></span></div>
+  <div class="mini-stat"><span class="mini-stat-icon icon-green">✓</span><span><small>ظاهرة في المتجر</small><strong>{{ active_products_count }}</strong></span></div>
+  <div class="mini-stat"><span class="mini-stat-icon icon-gray">◌</span><span><small>مخفية</small><strong>{{ hidden_products_count }}</strong></span></div>
+  <div class="mini-stat"><span class="mini-stat-icon icon-orange">!</span><span><small>مخزون منخفض</small><strong>{{ low_stock_count }}</strong></span></div>
+</section>
+
+<section class="panel list-panel">
+  <div class="panel-head">
+    <div><h2>قائمة المنتجات</h2><p>{{ page_obj.paginator.count }} منتج</p></div>
+  </div>
+  <form class="filter-bar filter-bar-modern" method="get">
+    <label class="search-field"><span aria-hidden="true">⌕</span><input name="q" value="{{ query }}" placeholder="ابحث باسم المنتج أو الوصف أو الرابط"></label>
+    <select name="visibility" aria-label="تصفية حسب الظهور">
+      <option value="">كل المنتجات</option><option value="active" {% if visibility == 'active' %}selected{% endif %}>الظاهرة</option><option value="hidden" {% if visibility == 'hidden' %}selected{% endif %}>المخفية</option><option value="low" {% if visibility == 'low' %}selected{% endif %}>مخزون منخفض</option>
+    </select>
+    <select name="sort" aria-label="ترتيب المنتجات">
+      <option value="newest" {% if sort == 'newest' %}selected{% endif %}>الأحدث أولًا</option><option value="name" {% if sort == 'name' %}selected{% endif %}>الاسم</option><option value="price_low" {% if sort == 'price_low' %}selected{% endif %}>السعر الأقل</option><option value="stock_low" {% if sort == 'stock_low' %}selected{% endif %}>المخزون الأقل</option>
+    </select>
+    <button class="btn btn-subtle" type="submit">تطبيق</button>
+    {% if query or visibility or sort != 'newest' %}<a class="clear-filters" href="{% url 'dashboard_products' %}">مسح التصفية</a>{% endif %}
+  </form>
+
+  <div class="table-wrap">
+    <table class="admin-table product-table">
+      <thead><tr><th>المنتج</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th>تاريخ الإضافة</th><th>الإجراءات</th></tr></thead>
+      <tbody>
+        {% for product in products %}
+          <tr>
+            <td><div class="product-cell"><span class="product-thumb">{% if product.image %}<img src="{{ product.image.url }}" alt="صورة {{ product.name }}">{% else %}<span>SH</span>{% endif %}</span><span><strong>{{ product.name }}</strong><small class="table-subtext">/{{ product.slug }}</small></span></div></td>
+            <td><strong>{{ product.current_price|floatformat:2 }}</strong><small class="table-subtext">جنيه مصري{% if product.sale_price %} · قبل الخصم {{ product.price|floatformat:2 }}{% endif %}</small></td>
+            <td><span class="stock-number {% if product.stock == 0 %}stock-empty{% elif product.stock <= 5 %}stock-low{% endif %}">{{ product.stock }}</span><small class="table-subtext">{% if product.stock == 0 %}نفد{% elif product.stock <= 5 %}يحتاج تزويد{% else %}متاح{% endif %}</small></td>
+            <td>{% if product.is_active %}<span class="status-badge status-visible"><i></i>ظاهر</span>{% else %}<span class="status-badge status-hidden"><i></i>مخفي</span>{% endif %}</td>
+            <td>{{ product.created_at|date:'d/m/Y' }}</td>
+            <td><div class="row-actions">
+              <a class="table-action" href="{% url 'dashboard_product_edit' product.pk %}">تعديل</a>
+              <form method="post" action="{% url 'dashboard_product_toggle' product.pk %}">{% csrf_token %}<button class="table-action" type="submit">{% if product.is_active %}إخفاء{% else %}إظهار{% endif %}</button></form>
+              <form method="post" action="{% url 'dashboard_product_delete' product.pk %}" onsubmit="return confirm('هل تريد حذف المنتج نهائيًا؟')">{% csrf_token %}<button class="table-action action-danger" type="submit">حذف</button></form>
+            </div></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6"><div class="empty-state"><span class="empty-icon">▦</span><strong>{% if query or visibility %}لا توجد نتائج{% else %}أضف أول منتج لمتجرك{% endif %}</strong><small>{% if query or visibility %}جرّب تغيير كلمات البحث أو التصفية.{% else %}المنتجات التي تضيفها هنا تظهر في صفحة المتجر بعد تفعيلها.{% endif %}</small>{% if not query and not visibility %}<a class="btn btn-subtle" href="{% url 'dashboard_product_add' %}">إضافة منتج</a>{% endif %}</div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="pagination" aria-label="صفحات المنتجات">
+      <span>صفحة {{ page_obj.number }} من {{ page_obj.paginator.num_pages }}</span>
+      <div>{% if page_obj.has_previous %}<a href="?q={{ query|urlencode }}&visibility={{ visibility }}&sort={{ sort }}&page={{ page_obj.previous_page_number }}">السابق</a>{% endif %}{% if page_obj.has_next %}<a href="?q={{ query|urlencode }}&visibility={{ visibility }}&sort={{ sort }}&page={{ page_obj.next_page_number }}">التالي</a>{% endif %}</div>
+    </nav>
+  {% endif %}
+</section>
+{% endblock %}
+
