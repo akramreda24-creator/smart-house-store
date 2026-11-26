@@ -3,6 +3,7 @@ import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# Security
 SECRET_KEY = os.environ.get(
     "SECRET_KEY",
     "local-development-only-change-me"
@@ -24,14 +25,19 @@ ALLOWED_HOSTS += [
     ".vercel.app",
 ]
 
+# Vercel and Render Hosts
 for key in (
     "VERCEL_URL",
     "VERCEL_PROJECT_PRODUCTION_URL",
     "VERCEL_BRANCH_URL",
+    "RENDER_EXTERNAL_HOSTNAME",
 ):
     host = os.environ.get(key)
     if host:
         ALLOWED_HOSTS.append(host)
+
+# Remove duplicates
+ALLOWED_HOSTS = list(set(ALLOWED_HOSTS))
 
 
 # CSRF Trusted Origins
@@ -43,24 +49,19 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
-RENDER_EXTERNAL_HOSTNAME = os.environ.get(
-    "RENDER_EXTERNAL_HOSTNAME"
-)
-
-if RENDER_EXTERNAL_HOSTNAME:
-    CSRF_TRUSTED_ORIGINS.append(
-        f"https://{RENDER_EXTERNAL_HOSTNAME}"
-    )
-
 for key in (
     "VERCEL_URL",
     "VERCEL_PROJECT_PRODUCTION_URL",
+    "VERCEL_BRANCH_URL",
+    "RENDER_EXTERNAL_HOSTNAME",
 ):
     host = os.environ.get(key)
     if host:
         CSRF_TRUSTED_ORIGINS.append(
             f"https://{host}"
         )
+
+CSRF_TRUSTED_ORIGINS = list(set(CSRF_TRUSTED_ORIGINS))
 
 
 # Installed Applications
@@ -121,7 +122,8 @@ if DATABASE_URL:
     DATABASES = {
         "default": dj_database_url.parse(
             DATABASE_URL,
-            conn_max_age=600
+            conn_max_age=600,
+            ssl_require=not DEBUG,
         )
     }
 else:
@@ -161,7 +163,11 @@ USE_TZ = True
 # Static Files
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
-STATICFILES_DIRS = [BASE_DIR / "static"]
+
+if (BASE_DIR / "static").exists():
+    STATICFILES_DIRS = [BASE_DIR / "static"]
+else:
+    STATICFILES_DIRS = []
 
 STORAGES = {
     "default": {
@@ -178,6 +184,7 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 
+# Default Primary Key
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
