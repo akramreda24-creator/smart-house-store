@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: smart-house-store
+    runtime: python
+    plan: free
+    buildCommand: ./build.sh
+    startCommand: gunicorn config.wsgi:application
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DEBUG
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smart-house-store-db
+          property: connectionString
+
+databases:
+  - name: smart-house-store-db
+    plan: free
+    databaseName: smart_house_store
+    user: smart_house_user
