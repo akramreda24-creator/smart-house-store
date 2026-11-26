@@ -5,14 +5,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get("SECRET_KEY", "local-development-only-change-me")
 DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
+
 ALLOWED_HOSTS = [
-    host.strip() for host in os.environ.get(
-        "ALLOWED_HOSTS", "127.0.0.1,localhost"
-    ).split(",") if host.strip()
+    host.strip()
+    for host in os.environ.get("ALLOWED_HOSTS", "").split(",")
+    if host.strip()
 ]
-RENDER_EXTERNAL_HOSTNAME = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-if RENDER_EXTERNAL_HOSTNAME:
-    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+ALLOWED_HOSTS += ["127.0.0.1", "localhost", ".vercel.app"]
+
+for key in ("VERCEL_URL", "VERCEL_PROJECT_PRODUCTION_URL", "VERCEL_BRANCH_URL"):
+    host = os.environ.get(key)
+    if host:
+        ALLOWED_HOSTS.append(host)
+
 
 CSRF_TRUSTED_ORIGINS = [
     origin.strip() for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
