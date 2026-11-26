@@ -1,12 +1,15 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, reverse_lazy
+from django.views.generic import RedirectView
 from django.conf import settings
 from django.conf.urls.static import static
 from store import views
 
 urlpatterns = [
-    path("admin/", admin.site.urls),
-    path("dashboard/", views.dashboard, name="dashboard"),
+    path("admin/login/", RedirectView.as_view(url=reverse_lazy("admin:login"), query_string=True), name="admin_login"),
+    path("admin/", views.dashboard, name="dashboard"),
+    path("django-admin/", admin.site.urls),
+    path("dashboard/", RedirectView.as_view(pattern_name="dashboard", permanent=False), name="dashboard_legacy"),
     path("dashboard/products/", views.dashboard_products, name="dashboard_products"),
     path("dashboard/products/add/", views.dashboard_product_add, name="dashboard_product_add"),
     path("dashboard/products/<int:pk>/edit/", views.dashboard_product_edit, name="dashboard_product_edit"),
