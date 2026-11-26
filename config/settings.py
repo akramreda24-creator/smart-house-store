@@ -18,6 +18,7 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
     "localhost",
     ".vercel.app",
+    "akramreda.pythonanywhere.com",
 ]
 
 ALLOWED_HOSTS += [
@@ -59,6 +60,7 @@ for key in (
         CSRF_TRUSTED_ORIGINS.append(f"https://{host}")
 
 CSRF_TRUSTED_ORIGINS = list(set(CSRF_TRUSTED_ORIGINS))
+CSRF_TRUSTED_ORIGINS.append("https://akramreda.pythonanywhere.com")
 
 
 # Applications
