@@ -1,3 +1,4 @@
+
 from pathlib import Path
 import os
 
@@ -14,18 +15,17 @@ DEBUG = os.environ.get("DEBUG", "False").lower() == "true"
 
 # Allowed Hosts
 ALLOWED_HOSTS = [
-    host.strip()
-    for host in os.environ.get("ALLOWED_HOSTS", "").split(",")
-    if host.strip()
-]
-
-ALLOWED_HOSTS += [
     "127.0.0.1",
     "localhost",
     ".vercel.app",
 ]
 
-# Vercel and Render Hosts
+ALLOWED_HOSTS += [
+    host.strip()
+    for host in os.environ.get("ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+
 for key in (
     "VERCEL_URL",
     "VERCEL_PROJECT_PRODUCTION_URL",
@@ -36,11 +36,10 @@ for key in (
     if host:
         ALLOWED_HOSTS.append(host)
 
-# Remove duplicates
 ALLOWED_HOSTS = list(set(ALLOWED_HOSTS))
 
 
-# CSRF Trusted Origins
+# CSRF
 CSRF_TRUSTED_ORIGINS = [
     origin.strip()
     for origin in os.environ.get(
@@ -57,14 +56,12 @@ for key in (
 ):
     host = os.environ.get(key)
     if host:
-        CSRF_TRUSTED_ORIGINS.append(
-            f"https://{host}"
-        )
+        CSRF_TRUSTED_ORIGINS.append(f"https://{host}")
 
 CSRF_TRUSTED_ORIGINS = list(set(CSRF_TRUSTED_ORIGINS))
 
 
-# Installed Applications
+# Applications
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -155,7 +152,6 @@ AUTH_PASSWORD_VALIDATORS = [
 # Language and Time
 LANGUAGE_CODE = "ar"
 TIME_ZONE = "Africa/Cairo"
-
 USE_I18N = True
 USE_TZ = True
 
@@ -164,8 +160,10 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-if (BASE_DIR / "static").exists():
-    STATICFILES_DIRS = [BASE_DIR / "static"]
+STATIC_DIR = BASE_DIR / "static"
+
+if STATIC_DIR.exists():
+    STATICFILES_DIRS = [STATIC_DIR]
 else:
     STATICFILES_DIRS = []
 
@@ -184,11 +182,10 @@ MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 
-# Default Primary Key
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-# HTTPS Settings
+# HTTPS
 if not DEBUG:
     SECURE_PROXY_SSL_HEADER = (
         "HTTP_X_FORWARDED_PROTO",
