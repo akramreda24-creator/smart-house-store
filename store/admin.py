@@ -1,6 +1,10 @@
 from django.contrib import admin
 from .models import Product, Order, OrderItem
 
+admin.site.site_header = "Smart House · إدارة المتجر"
+admin.site.site_title = "Smart House · الإدارة"
+admin.site.index_title = "إدارة المتجر"
+
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
     list_display = ("name", "price", "sale_price", "stock", "is_active", "is_featured")
